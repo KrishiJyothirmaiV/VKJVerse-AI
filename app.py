@@ -6,6 +6,7 @@ from pathlib import Path
 import requests
 import streamlit as st
 from dotenv import load_dotenv
+from ai_assistant import ask_drama_assistant
 
 # ==========================================
 # VKJVERSE AI - PURPLE CUTE EDITION
@@ -17,14 +18,13 @@ st.set_page_config(
     page_title="VKJVerse AI | Your Drama Universe",
     page_icon="💜",
     layout="wide",
-    initial_sidebar_state="expanded"
+    initial_sidebar_state="expanded",
 )
 
 TMDB_TOKEN = os.getenv("TMDB_READ_TOKEN", "").strip()
 BASE_URL = "https://api.themoviedb.org/3"
 IMAGE_URL = "https://image.tmdb.org/t/p/w500"
 DB_PATH = Path(__file__).resolve().parent / "vkjverse_watchlist.db"
-
 
 # ==========================================
 # PURPLE THEME + CUTE FONTS
@@ -85,7 +85,7 @@ p, label, input, textarea, button,
     font-family: 'Quicksand', sans-serif !important;
 }
 
-/* SIDEBAR - PURPLE THEME + FIXED ALIGNMENT */
+/* SIDEBAR */
 
 section[data-testid="stSidebar"] {
     background: linear-gradient(
@@ -96,30 +96,36 @@ section[data-testid="stSidebar"] {
     border-right: 1px solid #50336F;
 }
 
-/* Align radio buttons and text */
+/* SIDEBAR NAVIGATION - CORRECTED */
+
+section[data-testid="stSidebar"] [role="radiogroup"] {
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 4px !important;
+    width: 100% !important;
+}
+
 section[data-testid="stSidebar"] [role="radiogroup"] label {
     display: flex !important;
     flex-direction: row !important;
     align-items: center !important;
     justify-content: flex-start !important;
-    gap: 10px !important;
     width: 100% !important;
     padding: 10px 8px !important;
     border-radius: 12px !important;
+    gap: 8px !important;
 }
 
-/* Keep labels on a single line */
 section[data-testid="stSidebar"] [role="radiogroup"] label p {
     margin: 0 !important;
-    white-space: nowrap !important;
+    white-space: normal !important;
+    overflow-wrap: anywhere !important;
     font-size: 14px !important;
 }
 
-/* Prevent radio circles from shrinking */
 section[data-testid="stSidebar"] [role="radiogroup"] label > div:first-child {
     flex-shrink: 0 !important;
 }
-
 
 /* INPUTS */
 
@@ -251,15 +257,11 @@ hr {
     font-weight: 600;
 }
 
-/* SECTION SUBTITLE */
-
 .vkj-section-note {
     color: #C6B1DB;
     margin-top: -0.5rem;
     margin-bottom: 1.5rem;
 }
-
-/* FOOTER */
 
 .vkj-footer {
     text-align: center;
@@ -267,10 +269,8 @@ hr {
     font-size: 0.85rem;
     padding: 1rem;
 }
-
 </style>
 """, unsafe_allow_html=True)
-
 
 # ==========================================
 # TMDB API FUNCTIONS
@@ -280,7 +280,7 @@ hr {
 def tmdb_request(endpoint, token, params=None):
     headers = {
         "Authorization": f"Bearer {token}",
-        "accept": "application/json"
+        "accept": "application/json",
     }
 
     try:
@@ -288,9 +288,8 @@ def tmdb_request(endpoint, token, params=None):
             BASE_URL + endpoint,
             headers=headers,
             params=params or {},
-            timeout=20
+            timeout=20,
         )
-
         response.raise_for_status()
         return response.json()
 
@@ -357,7 +356,7 @@ def add_to_watchlist(item):
             item["id"],
             media_type,
             title,
-            item.get("poster_path")
+            item.get("poster_path"),
         ))
 
     st.toast(f"💜 Added {title} to your watchlist!")
@@ -377,9 +376,7 @@ def display_titles(items, section_key):
     for start in range(0, len(items), 4):
         columns = st.columns(4, gap="medium")
 
-        for offset, item in enumerate(
-            items[start:start + 4]
-        ):
+        for offset, item in enumerate(items[start:start + 4]):
             index = start + offset
 
             with columns[offset]:
@@ -388,7 +385,7 @@ def display_titles(items, section_key):
                 if poster:
                     st.image(
                         IMAGE_URL + poster,
-                        use_container_width=True
+                        use_container_width=True,
                     )
                 else:
                     st.caption("🎞️ Poster unavailable")
@@ -408,7 +405,6 @@ def display_titles(items, section_key):
                 )
 
                 st.markdown(f"**{title}**")
-
                 st.caption(
                     f"⭐ {rating:.1f}/10 · 📅 {release_date}"
                 )
@@ -422,32 +418,36 @@ def display_titles(items, section_key):
                 if st.button(
                     "♡ Add to Watchlist",
                     key=f"{section_key}_{index}_{item['id']}",
-                    use_container_width=True
+                    use_container_width=True,
                 ):
                     add_to_watchlist(item)
 
 
 # ==========================================
-# HERO BANNER - CORRECTED HTML
+# HERO BANNER
 # ==========================================
 
 st.markdown("""
 <div class="vkj-hero">
-<div class="vkj-eyebrow">✦ WELCOME TO VKJVERSE AI ✦</div>
-<div class="vkj-hero-title">Your Universe of Stories. ♡</div>
-<div class="vkj-hero-subtitle">
-Discover your next obsession! From dreamy K-dramas
-and Thai BL/GL series to C-dramas, J-dramas,
-Indian cinema and Hollywood, your favorite
-stories live here.
-</div>
-<div class="vkj-chips">
-<span class="vkj-chip">♡ K-Dramas</span>
-<span class="vkj-chip">✦ C-Dramas</span>
-<span class="vkj-chip">♡ Thai BL/GL</span>
-<span class="vkj-chip">✦ J-Dramas</span>
-<span class="vkj-chip">♡ Global Cinema</span>
-</div>
+    <div class="vkj-eyebrow">
+        ✦ WELCOME TO VKJVERSE AI ✦
+    </div>
+    <div class="vkj-hero-title">
+        Your Universe of Stories. ♡
+    </div>
+    <div class="vkj-hero-subtitle">
+        Discover your next obsession! From dreamy K-dramas
+        and Thai BL/GL series to C-dramas, J-dramas,
+        Indian cinema and Hollywood, your favorite
+        stories live here.
+    </div>
+    <div class="vkj-chips">
+        <span class="vkj-chip">♡ K-Dramas</span>
+        <span class="vkj-chip">✦ C-Dramas</span>
+        <span class="vkj-chip">♡ Thai BL/GL</span>
+        <span class="vkj-chip">✦ J-Dramas</span>
+        <span class="vkj-chip">♡ Global Cinema</span>
+    </div>
 </div>
 """, unsafe_allow_html=True)
 
@@ -470,10 +470,7 @@ if not TMDB_TOKEN:
 # ==========================================
 
 st.sidebar.markdown("## 💜 VKJVerse AI")
-
-st.sidebar.caption(
-    "Your cozy corner of entertainment ✨"
-)
+st.sidebar.caption("Your cozy corner of entertainment ✨")
 
 page = st.sidebar.radio(
     "Explore your universe",
@@ -484,12 +481,12 @@ page = st.sidebar.radio(
         "🌏 World Explorer",
         "📅 Episode Radar",
         "🤖 Recommendations",
-        "❤️ My Watchlist"
-    ]
+        "❤️ My Watchlist",
+        "💬 AI Drama Assistant",
+    ],
 )
 
 st.sidebar.divider()
-
 st.sidebar.caption("Made for drama lovers ♡")
 
 
@@ -498,21 +495,19 @@ st.sidebar.caption("Made for drama lovers ♡")
 # ==========================================
 
 if page == "🏠 Home":
-
     st.header("🔥 Trending This Week")
 
     st.markdown(
         '<div class="vkj-section-note">'
         'The stories everyone is talking about ✨'
         '</div>',
-        unsafe_allow_html=True
+        unsafe_allow_html=True,
     )
 
     trending = get_data("/trending/all/week")
-
     display_titles(
         trending.get("results", []),
-        "home_trending"
+        "home_trending",
     )
 
     st.header("💜 Popular TV Series")
@@ -521,13 +516,13 @@ if page == "🏠 Home":
         "/tv/popular",
         {
             "language": "en-US",
-            "page": 1
-        }
+            "page": 1,
+        },
     )
 
     display_titles(
         popular.get("results", [])[:8],
-        "home_popular"
+        "home_popular",
     )
 
 
@@ -536,23 +531,22 @@ if page == "🏠 Home":
 # ==========================================
 
 elif page == "🔥 Trending":
-
     st.header("🔥 What's Trending?")
 
     category = st.selectbox(
         "Choose your category",
-        ["All", "Movies", "TV Series"]
+        ["All", "Movies", "TV Series"],
     )
 
     period = st.selectbox(
         "Trending period",
-        ["Today", "This Week"]
+        ["Today", "This Week"],
     )
 
     media_map = {
         "All": "all",
         "Movies": "movie",
-        "TV Series": "tv"
+        "TV Series": "tv",
     }
 
     period_code = (
@@ -566,7 +560,7 @@ elif page == "🔥 Trending":
 
     display_titles(
         data.get("results", []),
-        "trending"
+        "trending",
     )
 
 
@@ -575,22 +569,20 @@ elif page == "🔥 Trending":
 # ==========================================
 
 elif page == "🔎 Search":
-
     st.header("🔎 Find Your Next Favorite")
 
     query = st.text_input(
         "Search movies and dramas",
-        placeholder="Lovely Runner, The Untamed, 2gether..."
+        placeholder="Lovely Runner, The Untamed, 2gether...",
     )
 
     if query.strip():
-
         results = get_data(
             "/search/multi",
             {
                 "query": query.strip(),
-                "include_adult": "false"
-            }
+                "include_adult": "false",
+            },
         )
 
         titles = [
@@ -614,7 +606,6 @@ elif page == "🔎 Search":
 # ==========================================
 
 elif page == "🌏 World Explorer":
-
     st.header("🌏 Around the World")
 
     countries = {
@@ -627,18 +618,18 @@ elif page == "🌏 World Explorer":
         "🇵🇭 Philippines": "PH",
         "🇺🇸 United States": "US",
         "🇬🇧 United Kingdom": "GB",
-        "🇹🇷 Turkey": "TR"
+        "🇹🇷 Turkey": "TR",
     }
 
     country = st.selectbox(
         "Pick a country",
-        list(countries.keys())
+        list(countries.keys()),
     )
 
     content_type = st.radio(
         "What would you like to explore?",
         ["TV Series", "Movies"],
-        horizontal=True
+        horizontal=True,
     )
 
     media_type = (
@@ -652,8 +643,8 @@ elif page == "🌏 World Explorer":
             "with_origin_country": countries[country],
             "sort_by": "popularity.desc",
             "include_adult": "false",
-            "page": 1
-        }
+            "page": 1,
+        },
     )
 
     st.caption(
@@ -662,7 +653,7 @@ elif page == "🌏 World Explorer":
 
     display_titles(
         data.get("results", []),
-        "world"
+        "world",
     )
 
     st.info(
@@ -676,7 +667,6 @@ elif page == "🌏 World Explorer":
 # ==========================================
 
 elif page == "📅 Episode Radar":
-
     st.header("📅 Episode Radar")
 
     st.write(
@@ -686,36 +676,29 @@ elif page == "📅 Episode Radar":
 
     drama_name = st.text_input(
         "Search a TV series",
-        placeholder="Enter an ongoing drama"
+        placeholder="Enter an ongoing drama",
     )
 
     if drama_name.strip():
-
         results = get_data(
             "/search/tv",
-            {
-                "query": drama_name.strip()
-            }
+            {"query": drama_name.strip()},
         )
 
         shows = results.get("results", [])[:15]
 
         if shows:
-
             selected = st.selectbox(
                 "Choose your drama",
                 range(len(shows)),
                 format_func=lambda i: (
                     f"{shows[i].get('name', 'Unknown')} "
                     f"({(shows[i].get('first_air_date') or 'Unknown')[:4]})"
-                )
+                ),
             )
 
             show = shows[selected]
-
-            details = get_data(
-                f"/tv/{show['id']}"
-            )
+            details = get_data(f"/tv/{show['id']}")
 
             st.subheader(
                 details.get("name", "TV Series")
@@ -724,7 +707,7 @@ elif page == "📅 Episode Radar":
             if details.get("poster_path"):
                 st.image(
                     IMAGE_URL + details["poster_path"],
-                    width=230
+                    width=230,
                 )
 
             st.write(
@@ -737,7 +720,6 @@ elif page == "📅 Episode Radar":
             )
 
             if next_episode:
-
                 st.success(
                     f"💜 Season "
                     f"{next_episode.get('season_number')} "
@@ -748,13 +730,13 @@ elif page == "📅 Episode Radar":
                 st.write(
                     "📅 Release date:",
                     next_episode.get("air_date")
-                    or "Unknown"
+                    or "Unknown",
                 )
 
                 st.write(
                     "Episode title:",
                     next_episode.get("name")
-                    or "Not available"
+                    or "Not available",
                 )
 
             else:
@@ -784,7 +766,6 @@ elif page == "📅 Episode Radar":
 # ==========================================
 
 elif page == "🤖 Recommendations":
-
     st.header("🤖 Your Next Obsession")
 
     st.write(
@@ -794,17 +775,16 @@ elif page == "🤖 Recommendations":
 
     favorite = st.text_input(
         "Your favorite title",
-        placeholder="Crash Landing on You"
+        placeholder="Crash Landing on You",
     )
 
     if favorite.strip():
-
         results = get_data(
             "/search/multi",
             {
                 "query": favorite.strip(),
-                "include_adult": "false"
-            }
+                "include_adult": "false",
+            },
         )
 
         matches = [
@@ -814,7 +794,6 @@ elif page == "🤖 Recommendations":
         ][:12]
 
         if matches:
-
             selected = st.selectbox(
                 "Choose the correct title",
                 range(len(matches)),
@@ -822,11 +801,10 @@ elif page == "🤖 Recommendations":
                     matches[i].get("title")
                     or matches[i].get("name")
                     or "Unknown"
-                )
+                ),
             )
 
             chosen = matches[selected]
-
             media_type = get_media_type(chosen)
 
             recommendations = get_data(
@@ -837,7 +815,7 @@ elif page == "🤖 Recommendations":
 
             display_titles(
                 recommendations.get("results", []),
-                "recommendations"
+                "recommendations",
             )
 
             st.caption(
@@ -854,7 +832,6 @@ elif page == "🤖 Recommendations":
 # ==========================================
 
 elif page == "❤️ My Watchlist":
-
     st.header("❤️ My Little Watchlist")
 
     st.write(
@@ -875,14 +852,13 @@ elif page == "❤️ My Watchlist":
         )
 
     for tmdb_id, media_type, title, poster in saved_items:
-
         col1, col2, col3 = st.columns([1, 4, 2])
 
         with col1:
             if poster:
                 st.image(
                     IMAGE_URL + poster,
-                    width=90
+                    width=90,
                 )
 
         with col2:
@@ -892,9 +868,8 @@ elif page == "❤️ My Watchlist":
         with col3:
             if st.button(
                 "Remove ♡",
-                key=f"remove_{media_type}_{tmdb_id}"
+                key=f"remove_{media_type}_{tmdb_id}",
             ):
-
                 with database() as conn:
                     conn.execute("""
                         DELETE FROM watchlist
@@ -906,16 +881,81 @@ elif page == "❤️ My Watchlist":
 
 
 # ==========================================
-# FOOTER - CORRECTED
+# AI DRAMA ASSISTANT - UPDATED ERROR HANDLING
+# ==========================================
+
+elif page == "💬 AI Drama Assistant":
+    st.header("💬 VKJVerse AI Drama Assistant")
+
+    st.caption(
+        "Your personal AI companion for discovering "
+        "movies and dramas around the world 💜"
+    )
+
+    if "ai_chat_history" not in st.session_state:
+        st.session_state.ai_chat_history = []
+
+    for message in st.session_state.ai_chat_history:
+        with st.chat_message(message["role"]):
+            st.markdown(message["content"])
+
+    user_prompt = st.chat_input(
+        "Ask me about K-dramas, C-dramas, BL/GL, movies..."
+    )
+
+    if user_prompt:
+        st.session_state.ai_chat_history.append(
+            {"role": "user", "content": user_prompt}
+        )
+
+        with st.chat_message("user"):
+            st.markdown(user_prompt)
+
+        with st.chat_message("assistant"):
+            with st.spinner("Finding your next obsession... 💜"):
+                try:
+                    answer = ask_drama_assistant(user_prompt)
+
+                except Exception as error:
+                    if (
+                        "503" in str(error)
+                        or "UNAVAILABLE" in str(error)
+                    ):
+                        st.warning(
+                            "💜 Gemini is currently experiencing "
+                            "high demand. Please try again "
+                            "in a few minutes."
+                        )
+                    else:
+                        st.error(
+                            "The AI request failed. "
+                            "Please check your API configuration."
+                        )
+
+                    answer = None
+
+            if answer:
+                st.markdown(answer)
+
+                st.session_state.ai_chat_history.append(
+                    {
+                        "role": "assistant",
+                        "content": answer,
+                    }
+                )
+
+
+# ==========================================
+# FOOTER
 # ==========================================
 
 st.divider()
 
 st.markdown("""
 <div class="vkj-footer">
-💜 VKJVerse AI · Your cozy entertainment universe ♡
-<br>
-This product uses the TMDB API but is not
-endorsed or certified by TMDB.
+    💜 VKJVerse AI · Your cozy entertainment universe ♡
+    <br>
+    This product uses the TMDB API but is not
+    endorsed or certified by TMDB.
 </div>
 """, unsafe_allow_html=True)
