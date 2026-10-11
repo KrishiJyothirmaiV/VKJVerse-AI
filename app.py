@@ -6,7 +6,12 @@ from pathlib import Path
 import requests
 import streamlit as st
 from dotenv import load_dotenv
+
 from ai_assistant import ask_drama_assistant
+from drama_details import (
+    search_tv_series,
+    get_complete_drama_report,
+)
 
 # ==========================================
 # VKJVERSE AI - PURPLE CUTE EDITION
@@ -25,6 +30,7 @@ TMDB_TOKEN = os.getenv("TMDB_READ_TOKEN", "").strip()
 BASE_URL = "https://api.themoviedb.org/3"
 IMAGE_URL = "https://image.tmdb.org/t/p/w500"
 DB_PATH = Path(__file__).resolve().parent / "vkjverse_watchlist.db"
+
 
 # ==========================================
 # PURPLE THEME + CUTE FONTS
@@ -95,8 +101,6 @@ section[data-testid="stSidebar"] {
     );
     border-right: 1px solid #50336F;
 }
-
-/* SIDEBAR NAVIGATION - CORRECTED */
 
 section[data-testid="stSidebar"] [role="radiogroup"] {
     display: flex !important;
@@ -269,8 +273,24 @@ hr {
     font-size: 0.85rem;
     padding: 1rem;
 }
+
+/* EPISODE TRACKER */
+
+.vkj-episode-heading {
+    color: #E3C7FF;
+    font-family: 'Fredoka', sans-serif;
+    font-size: 1.2rem;
+    font-weight: 600;
+    margin-bottom: 0.5rem;
+}
+
+.vkj-episode-note {
+    color: #C6B1DB;
+    font-size: 0.9rem;
+}
 </style>
 """, unsafe_allow_html=True)
+
 
 # ==========================================
 # TMDB API FUNCTIONS
@@ -424,6 +444,538 @@ def display_titles(items, section_key):
 
 
 # ==========================================
+# EPISODE TRACKER HELPERS - NEW
+# ==========================================
+
+@st.cache_data(ttl=1800, show_spinner=False)
+def cached_drama_search(query):
+    return search_tv_series(query)
+
+
+@st.cache_data(ttl=1800, show_spinner=False)
+def cached_drama_report(series_id):
+    return get_complete_drama_report(series_id)
+
+
+def episode_status_label(episode):
+    """
+    Return a display status for an episode.
+
+    The report has already separated released,
+    upcoming, and undated episodes.
+    """
+    if not episode.get("air_date"):
+        return "❔ Date not announced"
+
+    return episode["air_date"]
+
+
+def show_episode_tracker():
+    """
+    Display the Episode Tracker Streamlit page.
+    """
+
+    st.title("📺 VKJVerse AI — Episode Tracker")
+
+    st.write(
+        "Explore your favorite dramas, discover their genres "
+        "and status, and follow episode release dates. 💜"
+    )
+
+    drama_query = st.text_input(
+        "🔎 Search for a drama",
+        placeholder=(
+            "Try Squid Game, Lovely Runner, "
+            "The Untamed, or an ongoing drama"
+        ),
+        key="episode_tracker_search",
+    )
+
+    if not drama_query.strip():
+        st.info(
+            "💜 Enter a drama title to view its "
+            "episodes and release schedule."
+        )
+        return
+
+    try:
+        with st.spinner("Searching for dramas..."):
+            results = cached_drama_search(
+                drama_query.strip()
+            )
+
+        if not results:
+            st.warning(
+                "No matching dramas found. "
+                "Try another title."
+            )
+            return
+
+        shows = results[:15]
+
+        selected_index = st.selectbox(
+            "Choose your drama",
+            range(len(shows)),
+            format_func=lambda i: (
+                f"{shows[i].get('name', 'Unknown')} "
+                f"({(shows[i].get('first_air_date') or 'N/A')[:4]}) "
+                f"— TMDB {shows[i]['id']}"
+            ),
+            key="episode_tracker_selection",
+        )
+
+        selected_show = shows[selected_index]
+        series_id = selected_show["id"]
+
+        with st.spinner(
+            "Loading drama details and episode schedule..."
+        ):
+            report = cached_drama_report(series_id)
+
+        drama = report["drama"]
+
+        # ----------------------------------
+        # DRAMA INFORMATION
+        # ----------------------------------
+
+        st.divider()
+        st.header(f"💜 {drama['title']}")
+
+        poster_col, info_col = st.columns(
+            [1, 2],
+            gap="large",
+        )
+
+        with poster_col:
+            if drama.get("poster_url"):
+                st.image(
+                    drama["poster_url"],
+                    use_container_width=True,
+                )
+            else:
+                st.info("Poster unavailable.")
+
+        with info_col:
+            st.subheader("✨ About This Drama")
+
+            st.write(
+                drama.get("overview")
+                or "No synopsis is currently available."
+            )
+
+            status = drama.get("status") or "Unknown"
+
+            if status == "Completed":
+                st.success("✅ Completed")
+            elif status == "Ongoing / Returning":
+                st.info("📺 Ongoing / Returning")
+            elif status == "Canceled":
+                st.warning("⚠️ Canceled")
+            else:
+                st.info(f"📌 {status}")
+
+            st.write(
+                "**🎭 Genres:**",
+                ", ".join(drama.get("genres", []))
+                or "Not available",
+            )
+
+            st.write(
+                "**🌏 Country:**",
+                ", ".join(drama.get("countries", []))
+                or "Not available",
+            )
+
+            st.write(
+                "**🗣️ Original language:**",
+                drama.get("language") or "Unknown",
+            )
+
+            st.write(
+                "**📺 Networks:**",
+                ", ".join(drama.get("networks", []))
+                or "Not available",
+            )
+
+            rating = drama.get("rating")
+
+            if rating is not None:
+                st.write(
+                    "**⭐ TMDB Rating:**",
+                    f"{rating:.1f}/10",
+                )
+
+            st.write(
+                "**📅 First aired:**",
+                drama.get("first_air_date")
+                or "Not announced",
+            )
+
+            st.write(
+                "**📅 Last listed air date:**",
+                drama.get("last_air_date")
+                or "Not available",
+            )
+
+        # ----------------------------------
+        # EPISODE STATISTICS
+        # ----------------------------------
+
+        st.divider()
+        st.subheader("📊 Drama & Episode Statistics")
+
+        col1, col2, col3 = st.columns(3)
+
+        with col1:
+            st.metric(
+                "📺 Total Seasons",
+                drama.get("total_seasons") or 0,
+            )
+
+        with col2:
+            st.metric(
+                "🎬 Total Episodes",
+                drama.get("total_episodes") or 0,
+            )
+
+        with col3:
+            st.metric(
+                "✅ Released Episodes",
+                report["released_episode_count"],
+            )
+
+        col4, col5, col6 = st.columns(3)
+
+        with col4:
+            st.metric(
+                "📅 Upcoming With Dates",
+                report["upcoming_episode_count"],
+            )
+
+        with col5:
+            st.metric(
+                "❔ Dates Not Announced",
+                report["unscheduled_episode_count"],
+            )
+
+        with col6:
+            st.metric(
+                "📚 Episodes Listed",
+                report["total_listed_episodes"],
+            )
+
+        st.caption(
+            "Episode counts are based on TMDB records. "
+            "Some shows may have incomplete listings."
+        )
+
+        # ----------------------------------
+        # NEXT EPISODE
+        # ----------------------------------
+
+        st.divider()
+        st.subheader("⏰ Next Episode Countdown")
+
+        next_episode = report.get("next_episode")
+
+        if next_episode:
+            season_number = next_episode.get(
+                "season_number", "?"
+            )
+
+            episode_number = next_episode.get(
+                "episode_number", "?"
+            )
+
+            next_title = (
+                next_episode.get("title")
+                or next_episode.get("name")
+                or "Title not announced"
+            )
+
+            st.success(
+                f"💜 Season {season_number} "
+                f"· Episode {episode_number}"
+            )
+
+            st.write(
+                "**🎬 Episode Title:**",
+                next_title,
+            )
+
+            st.write(
+                "**📅 Scheduled Air Date:**",
+                next_episode.get("air_date")
+                or "Not announced",
+            )
+
+            days_remaining = next_episode.get(
+                "days_until_release"
+            )
+
+            if days_remaining is not None:
+                st.metric(
+                    "⏳ Days Until Release",
+                    days_remaining,
+                )
+
+        else:
+            st.info(
+                "TMDB does not currently list a future "
+                "episode date for this drama."
+            )
+
+        # ----------------------------------
+        # UPCOMING EPISODES
+        # ----------------------------------
+
+        st.divider()
+        st.subheader("📅 Upcoming Episode Schedule")
+
+        upcoming = report.get(
+            "upcoming_episodes", []
+        )
+
+        if upcoming:
+            for episode in upcoming:
+                season = episode.get(
+                    "season_number", "?"
+                )
+
+                number = episode.get(
+                    "episode_number", "?"
+                )
+
+                title = (
+                    episode.get("title")
+                    or "Untitled Episode"
+                )
+
+                air_date = (
+                    episode.get("air_date")
+                    or "Date not announced"
+                )
+
+                with st.container(border=True):
+                    st.markdown(
+                        f"**💜 Season {season}, "
+                        f"Episode {number}: {title}**"
+                    )
+
+                    st.write(
+                        f"📅 Scheduled: {air_date}"
+                    )
+
+                    if episode.get("overview"):
+                        with st.expander(
+                            "Episode Description"
+                        ):
+                            st.write(
+                                episode["overview"]
+                            )
+        else:
+            st.info(
+                "No future episode dates have been "
+                "published on TMDB."
+            )
+
+        # ----------------------------------
+        # COMPLETE EPISODE GUIDE
+        # ----------------------------------
+
+        st.divider()
+        st.subheader("📚 Complete Episode Guide")
+
+        all_episodes = (
+            report.get("released_episodes", [])
+            + report.get("upcoming_episodes", [])
+            + report.get("unscheduled_episodes", [])
+        )
+
+        all_episodes = sorted(
+            all_episodes,
+            key=lambda episode: (
+                episode.get("season_number") or 0,
+                episode.get("episode_number") or 0,
+            ),
+        )
+
+        if all_episodes:
+            seasons = sorted({
+                episode["season_number"]
+                for episode in all_episodes
+                if episode.get("season_number") is not None
+            })
+
+            selected_season = st.selectbox(
+                "📺 Select a Season",
+                seasons,
+                format_func=lambda number: (
+                    f"Season {number}"
+                ),
+                key="episode_tracker_season",
+            )
+
+            released_ids = {
+                (
+                    episode.get("season_number"),
+                    episode.get("episode_number"),
+                )
+                for episode in report.get(
+                    "released_episodes", []
+                )
+            }
+
+            upcoming_ids = {
+                (
+                    episode.get("season_number"),
+                    episode.get("episode_number"),
+                )
+                for episode in report.get(
+                    "upcoming_episodes", []
+                )
+            }
+
+            season_episodes = [
+                episode
+                for episode in all_episodes
+                if episode.get("season_number")
+                == selected_season
+            ]
+
+            st.caption(
+                f"{len(season_episodes)} episodes listed "
+                f"for Season {selected_season}"
+            )
+
+            for episode in season_episodes:
+                number = episode.get(
+                    "episode_number", "?"
+                )
+
+                title = (
+                    episode.get("title")
+                    or "Untitled Episode"
+                )
+
+                air_date = episode_status_label(
+                    episode
+                )
+
+                episode_key = (
+                    episode.get("season_number"),
+                    episode.get("episode_number"),
+                )
+
+                if episode_key in released_ids:
+                    status_icon = "✅"
+                    status_text = "Released"
+
+                elif episode_key in upcoming_ids:
+                    status_icon = "📅"
+                    status_text = "Scheduled"
+
+                else:
+                    status_icon = "❔"
+                    status_text = "Date not announced"
+
+                with st.expander(
+                    f"{status_icon} Episode {number}: "
+                    f"{title} | {air_date}"
+                ):
+                    st.write(
+                        "**Status:**",
+                        status_text,
+                    )
+
+                    st.write(
+                        "**Original Air Date:**",
+                        episode.get("air_date")
+                        or "Not announced",
+                    )
+
+                    if episode.get("still_url"):
+                        st.image(
+                            episode["still_url"],
+                            width=350,
+                        )
+
+                    st.write(
+                        episode.get("overview")
+                        or "No episode summary available."
+                    )
+
+                    runtime = episode.get("runtime")
+
+                    if runtime:
+                        st.caption(
+                            f"⏱️ Runtime: {runtime} minutes"
+                        )
+        else:
+            st.info(
+                "No episode details are currently "
+                "listed for this drama."
+            )
+
+        # ----------------------------------
+        # UNSCHEDULED EPISODES
+        # ----------------------------------
+
+        unscheduled = report.get(
+            "unscheduled_episodes", []
+        )
+
+        if unscheduled:
+            st.divider()
+
+            with st.expander(
+                f"❔ Episodes Without Announced Dates "
+                f"({len(unscheduled)})"
+            ):
+                for episode in unscheduled:
+                    st.write(
+                        f"• Season "
+                        f"{episode.get('season_number')} "
+                        f"Episode "
+                        f"{episode.get('episode_number')}: "
+                        f"{episode.get('title') or 'Untitled'}"
+                    )
+
+        # ----------------------------------
+        # DATA DISCLAIMER
+        # ----------------------------------
+
+        st.divider()
+
+        st.caption(
+            "💜 Episode dates are original broadcast "
+            "dates from TMDB. Netflix, Viki, iQIYI, "
+            "YouTube, and other streaming services "
+            "may release episodes at different times. "
+            "TMDB may not have announced every future "
+            "episode date. 'Returning Series' does not "
+            "necessarily mean a drama is currently airing."
+        )
+
+    except requests.RequestException as error:
+        st.error(
+            "Unable to retrieve drama information "
+            "from TMDB. Please try again."
+        )
+        st.caption(str(error))
+
+    except Exception as error:
+        st.error(
+            "Unable to load the Episode Tracker. "
+            "Please check your drama_details.py "
+            "file and TMDB configuration."
+        )
+        st.caption(
+            f"{type(error).__name__}: {error}"
+        )
+
+
+# ==========================================
 # HERO BANNER
 # ==========================================
 
@@ -480,6 +1032,7 @@ page = st.sidebar.radio(
         "🔎 Search",
         "🌏 World Explorer",
         "📅 Episode Radar",
+        "📺 Episode Tracker",
         "🤖 Recommendations",
         "❤️ My Watchlist",
         "💬 AI Drama Assistant",
@@ -505,6 +1058,7 @@ if page == "🏠 Home":
     )
 
     trending = get_data("/trending/all/week")
+
     display_titles(
         trending.get("results", []),
         "home_trending",
@@ -663,7 +1217,7 @@ elif page == "🌏 World Explorer":
 
 
 # ==========================================
-# EPISODE RADAR
+# EPISODE RADAR - ORIGINAL FEATURE
 # ==========================================
 
 elif page == "📅 Episode Radar":
@@ -759,6 +1313,14 @@ elif page == "📅 Episode Radar":
 
         else:
             st.info("No matching series found.")
+
+
+# ==========================================
+# EPISODE TRACKER - NEW FEATURE
+# ==========================================
+
+elif page == "📺 Episode Tracker":
+    show_episode_tracker()
 
 
 # ==========================================
@@ -881,7 +1443,7 @@ elif page == "❤️ My Watchlist":
 
 
 # ==========================================
-# AI DRAMA ASSISTANT - UPDATED ERROR HANDLING
+# AI DRAMA ASSISTANT - EXISTING FEATURE
 # ==========================================
 
 elif page == "💬 AI Drama Assistant":
