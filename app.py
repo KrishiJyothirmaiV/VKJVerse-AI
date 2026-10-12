@@ -7,11 +7,13 @@ import requests
 import streamlit as st
 from dotenv import load_dotenv
 
+
 from ai_assistant import ask_drama_assistant
 from drama_details import (
     search_tv_series,
     get_complete_drama_report,
 )
+from cast_explorer import show_cast_explorer
 
 # ==========================================
 # VKJVERSE AI - PURPLE CUTE EDITION
@@ -1034,6 +1036,7 @@ page = st.sidebar.radio(
         "📅 Episode Radar",
         "📺 Episode Tracker",
         "🤖 Recommendations",
+        "🎭 Cast Explorer",
         "❤️ My Watchlist",
         "💬 AI Drama Assistant",
     ],
@@ -1322,6 +1325,12 @@ elif page == "📅 Episode Radar":
 elif page == "📺 Episode Tracker":
     show_episode_tracker()
 
+# ==========================================
+# CAST EXPLORER - NEW FEATURE
+# ==========================================
+
+elif page == "🎭 Cast Explorer":
+    show_cast_explorer()
 
 # ==========================================
 # RECOMMENDATIONS
